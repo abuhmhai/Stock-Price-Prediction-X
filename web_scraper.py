@@ -1,26 +1,25 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
 import time
-
 import pandas as pd
 
 def Database(Companies):
-    driver = webdriver.Chrome()
+    driver = webdriver.Safari()
     driver.maximize_window()
 
     for company in Companies:
         driver.get("https://in.finance.yahoo.com/")
-        driver.find_element_by_id("yfin-usr-qry").send_keys(company)
-        driver.find_element_by_id("search-button").click()
+        driver.find_element(By.ID, "yfin-usr-qry").send_keys(company)
+        driver.find_element(By.ID, "search-button").click()
         time.sleep(5)
 
-        driver.find_element_by_xpath('''//*[@id="quote-nav"]/ul/li[5]/a''').click()
+        driver.find_element(By.XPATH, '//*[@id="quote-nav"]/ul/li[5]/a').click()
         time.sleep(5)
 
-        driver.find_element_by_xpath('''//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[1]/div[1]/div[1]/div/div/div/span''').click()
-        driver.find_element_by_xpath('''//*[@id="dropdown-menu"]/div/ul[2]/li[4]/button''').click()
-        driver.find_element_by_xpath('''//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[1]/div[1]/button''').click()
+        driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[1]/div[1]/div[1]/div/div/div/span').click()
+        driver.find_element(By.XPATH, '//*[@id="dropdown-menu"]/div/ul[2]/li[4]/button').click()
+        driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[1]/div[1]/button').click()
 
         # Scrolls the Webpage
         i = 1
@@ -41,10 +40,10 @@ def Database(Companies):
                 price.append(stock.text)
             data.append(price)
 
-        # Generate csv file 
+        # Generate csv file
         database = pd.DataFrame(data, columns = ["Date", "Open", "High", "Low", "Close", "Adj. Close", "Volume"])
         database.to_csv(rf'Database\{company}.csv', index = False)
-    
+
     driver.quit()
 
 if __name__ == "__main__":
