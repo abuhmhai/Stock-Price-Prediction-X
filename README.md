@@ -12,4 +12,4 @@ This project utilizes the ARIMA model for base predictions and then built a Deep
 
 
 ## Dataset
-Webscraped https://in.finance.yahoo.com using selenium and BeautifulSoup.
+Webscraped [ https://in.finance.yahoo.com](https://finance.yahoo.com/) using selenium and BeautifulSoup.
