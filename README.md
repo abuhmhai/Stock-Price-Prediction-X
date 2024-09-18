@@ -52,7 +52,7 @@ From the above graph, we can see that ACB has the highest expected returns and t
 
 ### Model
 <br>
-<img src='images/model.png'>
+<img src='images/model1.png'>
 <br><br>
 We train the model using the training dataset records and then use it to forecast the following week’s closing values (i.e., the next five values as a week consists of five working days). The forecasting is done in a multi-step manner with a walk-forward validation mode. <br><br> 
 The details of the design of each layer and the overall architecture of the model are as follows :
