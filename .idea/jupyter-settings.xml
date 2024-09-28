@@ -7,7 +7,7 @@
           <value>
             <JupyterConnectionParameters>
               <option name="managed" value="true" />
-              <option name="sdkName" value="Python 3.9 (fast-api)" />
+              <option name="sdkName" value="$USER_HOME$/Downloads/Developers/tensorflow/venv" />
             </JupyterConnectionParameters>
           </value>
         </entry>
