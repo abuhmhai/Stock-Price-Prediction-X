@@ -14,7 +14,6 @@ from tensorflow.keras.layers import Dense, LSTM
 # Initialize FastAPI app
 app = FastAPI()
 
-COINMARKETCAP_API_KEY = "ca1bf8a0-dece-42ac-9cd6-a242cb15209b"  # Set your CoinMarketCap API key here
 
 stock_data = None
 
@@ -160,6 +159,37 @@ async def predict_next_30_days():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/get_formatted_data/{symbol}")
+async def get_formatted_data(symbol: str):
+    try:
+        # Thay đổi URL API với tham số từ symbol
+        url = f"https://histdatafeed.vps.com.vn/tradingview/history?symbol={symbol}&resolution=1D&from=1546300800&to=1810903972"
+        response = requests.get(url)
+        data = response.json()
+
+        # Kiểm tra nếu dữ liệu trả về có lỗi
+        if data["s"] != "ok":
+            raise HTTPException(status_code=404, detail="Error fetching data")
+
+        # Chuyển đổi Unix timestamp sang định dạng ISO datetime và format dữ liệu
+        formatted_data = []
+        for i in range(len(data["t"])):
+            timestamp = data["t"][i]
+            formatted_time = datetime.utcfromtimestamp(timestamp).isoformat() + "Z"
+
+            formatted_data.append({
+                "time": formatted_time,
+                "open": data["o"][i],
+                "high": data["h"][i],
+                "low": data["l"][i],
+                "close": data["c"][i],
+                "volume": data["v"][i]
+            })
+
+        return {"predictstock": formatted_data}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
