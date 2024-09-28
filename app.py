@@ -1,20 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 import pandas as pd
 import numpy as np
-from joblib import load
-from fastapi.responses import JSONResponse
-from datetime import datetime, timedelta
-import requests
-from sklearn.preprocessing import MinMaxScaler
+import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, LSTM
-import tensorflow as tf
-import math
-import requests
 from datetime import datetime
-
-# Initialize FastAPI app
+import requests
+import math
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.layers import Input
 app = FastAPI()
 
 stock_data = None
@@ -25,16 +20,12 @@ async def get_stock_data(ticker: str):
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker symbol is required")
 
-    # Convert to uppercase, and define the timeframe (timestamps for from/to)
     ticker = ticker.upper()
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=730)
-
-    # Convert datetime to Unix timestamps
+    start_date = datetime(2019, 1, 1)
     start_timestamp = int(start_date.timestamp())
     end_timestamp = int(end_date.timestamp())
 
-    # API URL with the new API
     api_url = f"https://histdatafeed.vps.com.vn/tradingview/history?symbol={ticker}&resolution=1D&from={start_timestamp}&to={end_timestamp}"
 
     try:
@@ -42,14 +33,10 @@ async def get_stock_data(ticker: str):
         if response.status_code != 200:
             raise HTTPException(status_code=404, detail=f"Failed to fetch data for ticker: {ticker}")
 
-        # Parse the response
         data = response.json()
-
-        # If no data, return 404
         if data['s'] != 'ok':
             raise HTTPException(status_code=404, detail=f"No data found for ticker: {ticker}")
 
-        # Transform data into the desired format
         stock_data = [
             {
                 'date': datetime.utcfromtimestamp(t).strftime('%Y-%m-%d'),
@@ -61,7 +48,6 @@ async def get_stock_data(ticker: str):
             }
             for t, o, h, l, c, v in zip(data['t'], data['o'], data['h'], data['l'], data['c'], data['v'])
         ]
-
         return JSONResponse(content={'historicalData': stock_data})
 
     except Exception as e:
@@ -72,132 +58,113 @@ async def full_dataset():
     try:
         if stock_data is None:
             raise HTTPException(status_code=404, detail="No stock data available. Please fetch data first.")
-
         filtered_data = [{'date': record['date'], 'close': record['close']} for record in stock_data]
         return {"data": filtered_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Define model with the structure requested
-model = Sequential([
-        LSTM(200, input_shape=(5, 1), activation=tf.nn.leaky_relu, return_sequences=True),
-        LSTM(200, activation=tf.nn.leaky_relu),
-        Dense(200, activation=tf.nn.leaky_relu),
-        Dense(100, activation=tf.nn.leaky_relu),
+def create_model():
+    model = Sequential([
+        Input(shape=(15, 1)),  # Sử dụng lớp Input thay vì khai báo input_shape trong LSTM
+        LSTM(100, activation=tf.nn.leaky_relu, return_sequences=True),
+        #LSTM(200, activation=tf.nn.leaky_relu),
+        #Dense(200, activation=tf.nn.leaky_relu),
+        #Dense(100, activation=tf.nn.leaky_relu),
         Dense(50, activation=tf.nn.leaky_relu),
-        Dense(5, activation=tf.nn.leaky_relu)
+        Dense(1)  # Chỉ có một đầu ra cho giá 'close'
     ])
-# Compile the model
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(),
-    loss='mse',
-    metrics=[tf.keras.metrics.RootMeanSquaredError()]
-)
+    model.compile(optimizer=tf.keras.optimizers.Adam(), loss='mse', metrics=[tf.keras.metrics.RootMeanSquaredError()])
+    return model
 
-    # Define the learning rate scheduler
 def scheduler(epoch):
-        if epoch <= 150:
-            lrate = (10 ** -5) * (epoch / 150)
-        elif epoch <= 400:
-            initial_lrate = (10 ** -5)
-            k = 0.01
-            lrate = initial_lrate * math.exp(-k * (epoch - 150))
-        else:
-            lrate = (10 ** -6)
-        return lrate
+    if epoch <= 150:
+        return (10 ** -5) * (epoch / 150)
+    elif epoch <= 400:
+        return (10 ** -5) * math.exp(-0.01 * (epoch - 150))
+    else:
+        return 10 ** -6
+
 callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
-def train_model_from_full_data(full_data):
-        closedf = pd.DataFrame(full_data)[['close']]
+def train_model_from_full_data(data):
+    # Chuyển đổi dữ liệu thành DataFrame
+    df = pd.DataFrame(data)
 
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        closedf = scaler.fit_transform(np.array(closedf).reshape(-1, 1))
+    # Chuyển đổi cột 'close' thành numpy array và normalize dữ liệu
+    close_prices = df['close'].values
+    close_prices = close_prices.reshape(-1, 1)
 
-        training_size = int(len(closedf) * 0.80)
-        train_data, test_data = closedf[0:training_size, :], closedf[training_size:len(closedf), :1]
+    # Chuẩn hóa dữ liệu về khoảng [0, 1] bằng MinMaxScaler
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_close_prices = scaler.fit_transform(close_prices)
 
-        def create_dataset(dataset, time_step=1):
-            dataX, dataY = [], []
-            for i in range(len(dataset) - time_step - 1):
-                a = dataset[i:(i + time_step), 0]
-                dataX.append(a)
-                dataY.append(dataset[i + time_step, 0])
-            return np.array(dataX), np.array(dataY)
+    # Chia dữ liệu thành tập huấn luyện và kiểm tra (80% huấn luyện, 20% kiểm tra)
+    training_size = int(len(scaled_close_prices) * 0.8)
+    train_data = scaled_close_prices[0:training_size]
 
-        time_step = 15
-        X_train, y_train = create_dataset(train_data, time_step)
-        X_test, y_test = create_dataset(test_data, time_step)
+    # Tạo tập dữ liệu huấn luyện với các bước thời gian (time_step = 15)
+    time_step = 15
+    X_train, y_train = [], []
+    for i in range(time_step, len(train_data)):
+        X_train.append(train_data[i - time_step:i, 0])
+        y_train.append(train_data[i, 0])
 
-        X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
-        X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+    # Chuyển đổi dữ liệu thành numpy array
+    X_train, y_train = np.array(X_train), np.array(y_train)
 
-        history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=1000, batch_size=32, callbacks=[callback], verbose=1)
+    # Reshape đầu vào thành [samples, time steps, features] cho LSTM
+    X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-        model.save('./trained_model.h5')
-        return history
+    # Tạo mô hình và huấn luyện
+    model = create_model()
+
+    # Huấn luyện mô hình với callback để điều chỉnh learning rate
+    history = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1)
+
+    # Lưu mô hình sau khi huấn luyện
+    model.save('./trained_model.h5')
+
+    # Trả về lịch sử huấn luyện
+    return history
 
 @app.post("/train_model")
 async def train_model_endpoint():
-        try:
-            full_data = await full_dataset()
+    try:
+        full_data = await full_dataset()
+        if 'data' not in full_data:
+            raise HTTPException(status_code=404, detail="No data available for training")
 
-            if 'data' not in full_data:
-                raise HTTPException(status_code=404, detail="No data available for training")
-
-            history = train_model_from_full_data(full_data['data'])
-            return {"message": "Model trained successfully", "training_history": history.history}
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        history = train_model_from_full_data(full_data['data'])
+        return {"message": "Model trained successfully", "training_history": history.history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/predict_next_30_days")
 async def predict_next_30_days():
-        try:
-            # Load the pre-trained model
-            trained_model = load_model('./trained_model.h5')  # Load the model each time
+    try:
+        trained_model = load_model('./trained_model.h5')
+        full_data = await full_dataset()
+        if 'data' not in full_data or not full_data['data']:
+            raise HTTPException(status_code=404, detail="No data available for prediction")
 
-            # Fetch the full dataset
-            full_data = await full_dataset()
+        closedf = pd.DataFrame(full_data['data'])[['close']].values
+        time_step = 15
+        test_data = closedf[-time_step:]
+        temp_input = test_data.flatten().tolist()
 
-            # Check if 'data' is present
-            if 'data' not in full_data or not full_data['data']:
-                raise HTTPException(status_code=404, detail="No data available for prediction")
+        lst_output = []
+        pred_days = 30
 
-            # Prepare the 'Close' prices for scaling
-            closedf = pd.DataFrame(full_data['data'])[['close']]
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            closedf_scaled = scaler.fit_transform(closedf)
+        for _ in range(pred_days):
+            x_input = np.array(temp_input[-time_step:]).reshape((1, time_step, 1))
+            yhat = trained_model.predict(x_input, verbose=0)
+            temp_input.append(yhat[0][0])
+            lst_output.append(yhat[0][0])
 
-            # Use the last time_step data to predict the next 30 days
-            time_step = 15
-            test_data = closedf_scaled[-time_step:]  # Get the last time_step data
-            temp_input = test_data.flatten().tolist()  # Flatten to a list for processing
+        predicted_stock_price = np.array(lst_output).flatten()
+        return {"predicted_stock_price": predicted_stock_price.tolist()}
 
-            lst_output = []
-            pred_days = 30
-
-            for _ in range(pred_days):
-                if len(temp_input) > time_step:
-                    x_input = np.array(temp_input[-time_step:])  # Use the last time_step elements
-                else:
-                    x_input = np.array(temp_input)  # Fallback if less than time_step
-
-                x_input = x_input.reshape((1, time_step, 1))  # Reshape for LSTM input
-                yhat = trained_model.predict(x_input, verbose=0)  # Make prediction
-                temp_input.append(yhat[0][0])  # Append predicted value to input list
-                lst_output.append(yhat[0][0])  # Only append the predicted value
-
-            # Inverse scale to get the predicted stock prices
-            predicted_stock_price = scaler.inverse_transform(np.array(lst_output).reshape(-1, 1)).flatten()
-
-            return {"predicted_stock_price": predicted_stock_price.tolist()}
-
-        except FileNotFoundError:
-            raise HTTPException(status_code=500, detail="Model file not found.")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    # Run the app
-if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Model file not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
