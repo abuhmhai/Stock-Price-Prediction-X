@@ -119,7 +119,7 @@ def train_model_from_full_data(data):
     model = create_model()
 
     # Huấn luyện mô hình với callback để điều chỉnh learning rate
-    history = model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=1)
+    history = model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=1, callbacks=[callback])
 
     # Lưu mô hình sau khi huấn luyện
     model.save('./trained_model.h5')
