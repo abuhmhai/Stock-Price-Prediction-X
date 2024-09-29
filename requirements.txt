@@ -1,0 +1,10 @@
+pandas~=2.2.2
+numpy~=1.23.5
+tensorflow~=2.16.1
+requests~=2.32.3
+fastapi~=0.112.2
+scikit-learn~=1.5.1
+beautifulsoup4~=4.12.3
+streamlit~=1.37.1
+matplotlib~=3.9.2
+keras~=3.5.0
