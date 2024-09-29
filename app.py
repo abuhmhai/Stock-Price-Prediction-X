@@ -124,7 +124,7 @@ def train_model_from_full_data(data):
     model = create_model()
 
     # Train with callback for learning rate scheduling
-    history = model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1, callbacks=[callback])
+    history = model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=1, callbacks=[callback])
 
     # Save the trained model
     model.save('./trained_model.h5')
