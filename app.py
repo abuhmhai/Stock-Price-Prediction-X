@@ -101,7 +101,7 @@ def train_model_from_full_data(data):
     close_prices = df['close'].values.reshape(-1, 1)
 
     # Normalize using MinMaxScaler
-    scaled_close_prices = scaler.fit_transform(close_prices).astype(np.float32)
+    scaled_close_prices = close_prices.astype(np.float32)  # Use raw values instead of scaling
 
     # Split data into train/test (80% train)
     training_size = int(len(scaled_close_prices) * 0.8)
@@ -177,8 +177,8 @@ async def predict_next_30_days():
         # Reshape predicted values to match input for inverse transform
         predicted_stock_price = np.array(lst_output).reshape(-1, 1)
 
-        # Inverse transform to original scale
-        predicted_stock_price = scaler.inverse_transform(predicted_stock_price)
+        # Use predicted stock price directly as it was trained on raw data
+        predicted_stock_price = predicted_stock_price
 
         # Lấy ngày cuối cùng từ dữ liệu gốc
         last_date = datetime.strptime(full_data['data'][-1]['date'], "%Y-%m-%d")
