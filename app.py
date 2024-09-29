@@ -90,9 +90,8 @@ def scheduler(epoch):
         return 10 ** -6
 
 callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
-
 def train_model_from_full_data(data):
-    global scaler  # Sử dụng biến toàn cục scaler
+    global scaler
 
     # Convert data into DataFrame
     df = pd.DataFrame(data)
@@ -100,8 +99,8 @@ def train_model_from_full_data(data):
     # Convert 'close' column to numpy array and normalize
     close_prices = df['close'].values.reshape(-1, 1)
 
-    # Normalize using MinMaxScaler
-    scaled_close_prices = close_prices.astype(np.float32)  # Use raw values instead of scaling
+    # Fit the scaler on the close prices
+    scaled_close_prices = scaler.fit_transform(close_prices)
 
     # Split data into train/test (80% train)
     training_size = int(len(scaled_close_prices) * 0.8)
@@ -130,7 +129,6 @@ def train_model_from_full_data(data):
     model.save('./trained_model.h5')
 
     return history
-
 @app.post("/train_model")
 async def train_model_endpoint():
     try:
@@ -148,7 +146,7 @@ from datetime import timedelta
 
 @app.post("/predict_next_30_days")
 async def predict_next_30_days():
-    global scaler  # Sử dụng biến toàn cục scaler
+    global scaler
     try:
         trained_model = load_model('./trained_model.h5')
         full_data = await full_dataset()
@@ -156,6 +154,10 @@ async def predict_next_30_days():
             raise HTTPException(status_code=404, detail="No data available for prediction")
 
         closedf = pd.DataFrame(full_data['data'])[['close']].values
+
+        # Fit the scaler before using it to inverse transform
+        scaler.fit(closedf)
+
         time_step = 15
         test_data = closedf[-time_step:]
         temp_input = test_data.flatten().tolist()
@@ -164,7 +166,6 @@ async def predict_next_30_days():
         pred_days = 30
 
         for _ in range(pred_days):
-            # Ensure correct shape and type
             x_input = np.array(temp_input[-time_step:]).reshape((1, time_step, 1)).astype(np.float32)
 
             # Predict the next value
@@ -177,8 +178,8 @@ async def predict_next_30_days():
         # Reshape predicted values to match input for inverse transform
         predicted_stock_price = np.array(lst_output).reshape(-1, 1)
 
-        # Use predicted stock price directly as it was trained on raw data
-        predicted_stock_price = predicted_stock_price
+        # Inverse transform to original scale
+        predicted_stock_price = scaler.inverse_transform(predicted_stock_price)
 
         # Lấy ngày cuối cùng từ dữ liệu gốc
         last_date = datetime.strptime(full_data['data'][-1]['date'], "%Y-%m-%d")
