@@ -10,9 +10,11 @@ import requests
 import math
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.layers import Input
+
 app = FastAPI()
 
 stock_data = None
+scaler = MinMaxScaler(feature_range=(0, 1))  # Đặt scaler làm biến toàn cục
 
 @app.get("/get_stock_data/{ticker}")
 async def get_stock_data(ticker: str):
@@ -65,15 +67,18 @@ async def full_dataset():
 
 def create_model():
     model = Sequential([
-        Input(shape=(15, 1)),  # Sử dụng lớp Input thay vì khai báo input_shape trong LSTM
-        LSTM(100, activation=tf.nn.leaky_relu, return_sequences=True),
-        #LSTM(200, activation=tf.nn.leaky_relu),
-        #Dense(200, activation=tf.nn.leaky_relu),
-        #Dense(100, activation=tf.nn.leaky_relu),
+        LSTM(200, input_shape=(5, 1), activation=tf.nn.leaky_relu, return_sequences=True),
+        LSTM(200, activation=tf.nn.leaky_relu),
+        Dense(200, activation=tf.nn.leaky_relu),
+        Dense(100, activation=tf.nn.leaky_relu),
         Dense(50, activation=tf.nn.leaky_relu),
-        Dense(1)  # Chỉ có một đầu ra cho giá 'close'
+        Dense(1, activation=tf.nn.leaky_relu)
     ])
-    model.compile(optimizer=tf.keras.optimizers.Adam(), loss='mse', metrics=[tf.keras.metrics.RootMeanSquaredError()])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(),
+                  loss='mean_squared_error',
+                  metrics=[tf.keras.metrics.RootMeanSquaredError()])
+
     return model
 
 def scheduler(epoch):
@@ -87,44 +92,43 @@ def scheduler(epoch):
 callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
 def train_model_from_full_data(data):
-    # Chuyển đổi dữ liệu thành DataFrame
+    global scaler  # Sử dụng biến toàn cục scaler
+
+    # Convert data into DataFrame
     df = pd.DataFrame(data)
 
-    # Chuyển đổi cột 'close' thành numpy array và normalize dữ liệu
-    close_prices = df['close'].values
-    close_prices = close_prices.reshape(-1, 1)
+    # Convert 'close' column to numpy array and normalize
+    close_prices = df['close'].values.reshape(-1, 1)
 
-    # Chuẩn hóa dữ liệu về khoảng [0, 1] bằng MinMaxScaler
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_close_prices = scaler.fit_transform(close_prices)
+    # Normalize using MinMaxScaler
+    scaled_close_prices = scaler.fit_transform(close_prices).astype(np.float32)
 
-    # Chia dữ liệu thành tập huấn luyện và kiểm tra (80% huấn luyện, 20% kiểm tra)
+    # Split data into train/test (80% train)
     training_size = int(len(scaled_close_prices) * 0.8)
-    train_data = scaled_close_prices[0:training_size]
+    train_data = scaled_close_prices[:training_size]
 
-    # Tạo tập dữ liệu huấn luyện với các bước thời gian (time_step = 15)
+    # Create training dataset with time_step
     time_step = 15
     X_train, y_train = [], []
     for i in range(time_step, len(train_data)):
         X_train.append(train_data[i - time_step:i, 0])
         y_train.append(train_data[i, 0])
 
-    # Chuyển đổi dữ liệu thành numpy array
-    X_train, y_train = np.array(X_train), np.array(y_train)
+    # Convert to numpy array and ensure proper data types
+    X_train, y_train = np.array(X_train).astype(np.float32), np.array(y_train).astype(np.float32)
 
-    # Reshape đầu vào thành [samples, time steps, features] cho LSTM
+    # Reshape input into [samples, time steps, features] for LSTM
     X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-    # Tạo mô hình và huấn luyện
+    # Create model and train
     model = create_model()
 
-    # Huấn luyện mô hình với callback để điều chỉnh learning rate
-    history = model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=1, callbacks=[callback])
+    # Train with callback for learning rate scheduling
+    history = model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=1, callbacks=[callback])
 
-    # Lưu mô hình sau khi huấn luyện
+    # Save the trained model
     model.save('./trained_model.h5')
 
-    # Trả về lịch sử huấn luyện
     return history
 
 @app.post("/train_model")
@@ -139,15 +143,25 @@ async def train_model_endpoint():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+from datetime import timedelta
+
 @app.post("/predict_next_30_days")
 async def predict_next_30_days():
+    global scaler  # Sử dụng biến toàn cục scaler
     try:
-        trained_model = load_model('./trained_model.h5')
+        trained_model = load_model('./model.h5')
         full_data = await full_dataset()
         if 'data' not in full_data or not full_data['data']:
             raise HTTPException(status_code=404, detail="No data available for prediction")
 
+        # Lấy cột 'close' từ dữ liệu gốc và chuyển thành numpy array
         closedf = pd.DataFrame(full_data['data'])[['close']].values
+
+        # Fit scaler trên dữ liệu gốc để có thể sử dụng inverse_transform
+        scaler.fit(closedf)
+
+        # Sử dụng 15 giá trị cuối làm dữ liệu test để bắt đầu dự đoán
         time_step = 15
         test_data = closedf[-time_step:]
         temp_input = test_data.flatten().tolist()
@@ -156,13 +170,39 @@ async def predict_next_30_days():
         pred_days = 30
 
         for _ in range(pred_days):
-            x_input = np.array(temp_input[-time_step:]).reshape((1, time_step, 1))
-            yhat = trained_model.predict(x_input, verbose=0)
-            temp_input.append(yhat[0][0])
-            lst_output.append(yhat[0][0])
+            # Đảm bảo đúng hình dạng và kiểu dữ liệu
+            x_input = np.array(temp_input[-time_step:]).reshape((1, time_step, 1)).astype(np.float32)
 
-        predicted_stock_price = np.array(lst_output).flatten()
-        return {"predicted_stock_price": predicted_stock_price.tolist()}
+            # Dự đoán giá trị tiếp theo
+            yhat = trained_model.predict(x_input, verbose=0)
+
+            # Thêm giá trị dự đoán vào danh sách
+            temp_input.append(float(yhat[0][0]))
+            lst_output.append(float(yhat[0][0]))
+
+        # Định hình lại giá trị dự đoán để khớp với đầu vào cho inverse_transform
+        predicted_stock_price = np.array(lst_output).reshape(-1, 1)
+
+        # Inverse transform để quay về thang đo gốc
+        predicted_stock_price = scaler.inverse_transform(predicted_stock_price)
+
+        # Lấy ngày cuối cùng từ dữ liệu gốc
+        last_date = datetime.strptime(full_data['data'][-1]['date'], "%Y-%m-%d")
+
+        # Chuẩn bị danh sách kết quả dự đoán với định dạng yêu cầu
+        prediction_list = []
+        for i in range(pred_days):
+            next_date = last_date + timedelta(days=(i + 1))
+            prediction_list.append({
+                "time": next_date.strftime("%Y-%m-%dT%H:%M:%S.000Z"),  # Định dạng thời gian ISO
+                "open": 0,
+                "high": 0,
+                "low": 0,
+                "close": round(predicted_stock_price[i][0], 2),  # Giá trị close được dự đoán
+                "volume": 0
+            })
+
+        return {"predicted_stock_price": prediction_list}
 
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="Model file not found.")
