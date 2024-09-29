@@ -124,7 +124,7 @@ def train_model_from_full_data(data):
     model = create_model()
 
     # Train with callback for learning rate scheduling
-    history = model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=1, callbacks=[callback])
+    history = model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=1, callbacks=[callback])
 
     # Save the trained model
     model.save('./trained_model.h5')
@@ -150,18 +150,12 @@ from datetime import timedelta
 async def predict_next_30_days():
     global scaler  # Sử dụng biến toàn cục scaler
     try:
-        trained_model = load_model('./model.h5')
+        trained_model = load_model('./trained_model.h5')
         full_data = await full_dataset()
         if 'data' not in full_data or not full_data['data']:
             raise HTTPException(status_code=404, detail="No data available for prediction")
 
-        # Lấy cột 'close' từ dữ liệu gốc và chuyển thành numpy array
         closedf = pd.DataFrame(full_data['data'])[['close']].values
-
-        # Fit scaler trên dữ liệu gốc để có thể sử dụng inverse_transform
-        scaler.fit(closedf)
-
-        # Sử dụng 15 giá trị cuối làm dữ liệu test để bắt đầu dự đoán
         time_step = 15
         test_data = closedf[-time_step:]
         temp_input = test_data.flatten().tolist()
@@ -170,20 +164,20 @@ async def predict_next_30_days():
         pred_days = 30
 
         for _ in range(pred_days):
-            # Đảm bảo đúng hình dạng và kiểu dữ liệu
+            # Ensure correct shape and type
             x_input = np.array(temp_input[-time_step:]).reshape((1, time_step, 1)).astype(np.float32)
 
-            # Dự đoán giá trị tiếp theo
+            # Predict the next value
             yhat = trained_model.predict(x_input, verbose=0)
 
-            # Thêm giá trị dự đoán vào danh sách
+            # Append the predicted value
             temp_input.append(float(yhat[0][0]))
             lst_output.append(float(yhat[0][0]))
 
-        # Định hình lại giá trị dự đoán để khớp với đầu vào cho inverse_transform
+        # Reshape predicted values to match input for inverse transform
         predicted_stock_price = np.array(lst_output).reshape(-1, 1)
 
-        # Inverse transform để quay về thang đo gốc
+        # Inverse transform to original scale
         predicted_stock_price = scaler.inverse_transform(predicted_stock_price)
 
         # Lấy ngày cuối cùng từ dữ liệu gốc
