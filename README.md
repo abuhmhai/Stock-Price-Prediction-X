@@ -97,5 +97,9 @@ The table below compares the evaluation indicators of two models **ARIMA** and *
 3. Dev, U. (2020, June 21). EDA of Stock Market using Time Series - Usharbudha Dev. Medium. https://usharbudha-dev09.medium.com/eda-of-stock-market-using-time-series-9662fd18bfc5
 4. Duchi, J., Hazan, E., & Singer, Y. (2011). Adaptive subgradient methods for online learning and stochastic optimization. https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf
 5. HUA, Yuxiu, et al. Deep learning with long short-term memory for time series prediction. IEEE Communications Magazine, 2019, 57.6: 114-119. https://arxiv.org/pdf/1810.10161
+6. KANZARI, Dalel, et al. Predicting macro-financial instability–How relevant is sentiment? Evidence from long short-term memory networks. https://www.sciencedirect.com/science/article/abs/pii/S0275531923000387
+7. ZOU, Zhichao; QU, Zihao. Using lstm in stock prediction and quantitative trading. CS230: Deep learning, winter, 2020, 1-6. http://cs230.stanford.edu/projects_winter_2020/reports/32066186.pdf
+
+
 
 
