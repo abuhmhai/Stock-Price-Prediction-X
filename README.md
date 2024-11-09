@@ -20,13 +20,12 @@ Webscraped [ https://in.finance.yahoo.com](https://finance.yahoo.com/) using sel
 <br>
 <img src='images/Closing_Price_and_Time.png'>
 
-We can see from the above graph that Telsa shares have tremendous growth in the 2020-2021 period.
+We can see from the above graph that ACB shares have tremendous growth in the 2020-2021 period.
 <br>
 If we follow the news, it can be due to
 
 1. Emission Credit Sales
-2. Tesla entering the Fast-Growing Compact SUV Market
-3. Starting production in China
+2. Starting production in VietNam
 
 For the rest of the Companies, we can see that COVID-19 is the primary factor affecting the 2020-2021 period.
 <br>
@@ -40,7 +39,7 @@ For the rest of the Companies, we can see that COVID-19 is the primary factor af
 <br>
 <img src='images/output3.png'>
 <br>
-From the above plot, we can see that Microsoft and Google had the strongest correlation in stocks daily returns.
+From the above plot, we can see that ACB and CTG had the strongest correlation in stocks daily returns.
 
 ### Risk v/s Expected Returns
 <br>
