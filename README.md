@@ -95,4 +95,7 @@ The table below compares the evaluation indicators of two models **ARIMA** and *
 1. Mehtab, S. (2020, September 20). Stock Price Prediction Using Machine Learning and LSTM-Based Deep Learning Models. ArXiv.Org. https://arxiv.org/abs/2009.10819
 2. Chauhan, N. S. (2020, January). Stock Market Forecasting Using Time Series Analysis. KDnuggets. https://www.kdnuggets.com/2020/01/stock-market-forecasting-time-series-analysis.html
 3. Dev, U. (2020, June 21). EDA of Stock Market using Time Series - Usharbudha Dev. Medium. https://usharbudha-dev09.medium.com/eda-of-stock-market-using-time-series-9662fd18bfc5
+4. Duchi, J., Hazan, E., & Singer, Y. (2011). Adaptive subgradient methods for online learning and stochastic optimization. https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf
+5. HUA, Yuxiu, et al. Deep learning with long short-term memory for time series prediction. IEEE Communications Magazine, 2019, 57.6: 114-119. https://arxiv.org/pdf/1810.10161
+
 
